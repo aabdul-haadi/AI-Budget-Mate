@@ -226,11 +226,16 @@ Question: ${inputMessage}`;
         import.meta.env.VITE_GEMINI_ENDPOINT ||
         'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
+      const apiKey = import.meta.env.VITE_GOOGLE_API_KEY as string;
+      if (!apiKey) {
+        throw new Error('Google API key is missing in environment variables');
+      }
+
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-goog-api-key': import.meta.env.VITE_GOOGLE_API_KEY as string,
+          'X-goog-api-key': apiKey,
         },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
@@ -244,7 +249,8 @@ Question: ${inputMessage}`;
       });
 
       if (!response.ok) {
-        throw new Error(`API request failed: ${response.status}`);
+        const errorText = await response.text();
+        throw new Error(`API request failed: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
@@ -261,11 +267,11 @@ Question: ${inputMessage}`;
       };
 
       setMessages((prev) => [...prev, aiResponse]);
-    } catch (error) {
-      console.error('AI API Error:', error);
+    } catch (error: any) {
+      console.error('AI API Error:', error.message);
 
       const financialContext = getFinancialContext();
-      let fallbackMessage = `🤖 Hi ${getUserName()}! I'm offline but here’s a quick tip:\n`;
+      let fallbackMessage = `🤖 Hi ${getUserName()}! I'm offline due to an API issue: ${error.message}. Here’s a quick tip:\n`;
 
       if (inputMessage.toLowerCase().includes('budget')) {
         fallbackMessage += `Check your spending in the app.\n• Adjust high-expense categories.\nStay on track! 🌟`;
@@ -282,7 +288,7 @@ Question: ${inputMessage}`;
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);
-      toast.info('AI offline - using your data for insights!');
+      toast.error(`AI offline: ${error.message}`);
     } finally {
       setIsLoading(false);
     }
