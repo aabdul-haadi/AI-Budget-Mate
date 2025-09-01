@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Bot, Send, Loader, MessageCircle } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { Transaction, Budget, SavingsGoal, UserProfile } from '../lib/supabase';
 
 interface AIAdvisorProps {
-  transactions: any[];
-  budgets: any;
-  goals: any[];
-  userProfile?: { username?: string } | null;
+  transactions: Transaction[];
+  budgets: Record<string, Budget>;
+  goals: SavingsGoal[];
+  userProfile?: UserProfile | null;
   darkMode: boolean;
 }
 
@@ -22,7 +23,7 @@ export function AIAdvisor({
   budgets,
   goals,
   userProfile,
-  darkMode
+  darkMode,
 }: AIAdvisorProps) {
   const getUserName = () => {
     return userProfile?.username || 'friend';
@@ -84,9 +85,9 @@ export function AIAdvisor({
           return acc;
         }, {} as Record<string, number>);
 
-      Object.entries(budgets).forEach(([category, budget]: [string, any]) => {
+      Object.entries(budgets).forEach(([category, budget]) => {
         const spent = categoryExpenses[category] || 0;
-        const budgetLimit = budget?.amount || 0;
+        const budgetLimit = budget.monthly_limit || 0;
         if (spent > budgetLimit && !trackedCategories.has(category)) {
           const overSpentAmount = spent - budgetLimit;
           const message: Message = {
@@ -221,33 +222,26 @@ FORMAT:
 
 Question: ${inputMessage}`;
 
-      const response = await fetch(
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-goog-api-key': 'AIzaSyC0mqYX2jaxXDog-s49KWSA15OozbhNDKE',
+      const endpoint =
+        import.meta.env.VITE_GEMINI_ENDPOINT ||
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-goog-api-key': import.meta.env.VITE_GOOGLE_API_KEY as string,
+        },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.8,
+            maxOutputTokens: 150,
+            topP: 0.9,
+            topK: 40,
           },
-          body: JSON.stringify({
-            contents: [
-              {
-                parts: [
-                  {
-                    text: prompt,
-                  },
-                ],
-              },
-            ],
-            generationConfig: {
-              temperature: 0.8,
-              maxOutputTokens: 150, // Tighter for concise responses
-              topP: 0.9,
-              topK: 40,
-            },
-          }),
-        }
-      );
+        }),
+      });
 
       if (!response.ok) {
         throw new Error(`API request failed: ${response.status}`);
